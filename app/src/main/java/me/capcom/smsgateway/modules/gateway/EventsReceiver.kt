@@ -36,7 +36,7 @@ class EventsReceiver : EventsReceiver() {
 
                     if (!settings.enabled) return@collect
 
-                    PullMessagesWorker.start(get())
+                    PullMessagesWorker.startOnce(get())
                 }
             }
             launch {
@@ -60,7 +60,7 @@ class EventsReceiver : EventsReceiver() {
 
                     if (!settings.enabled) return@collect
 
-                    PullMessagesWorker.start(get())
+                    PullMessagesWorker.startOnce(get())
                 }
             }
 
