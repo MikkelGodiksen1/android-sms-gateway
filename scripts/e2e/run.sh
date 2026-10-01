@@ -93,7 +93,8 @@ adb shell am start -W -n "$PKG/.MainActivity" | tr -d '\r'
 sleep 15
 pid=$(app_pid)
 E2E logcat-grep --pattern "AndroidRuntime: Process: me\.capcom\.smsgateway" > "$E2E_OUT/crash-t1.txt"
-E2E logcat-grep --pattern "[Ff]irebase|FirebaseApp|FirebaseInstallations|FIS_AUTH|GoogleApiManager" --limit 40 > "$E2E_OUT/firebase-lines.txt"
+# Firebase lines from the app's own process only
+E2E logcat-grep --marker T1 --pattern "^\S+ \S+\s+${pid:-NOPID} .*([Ff]irebase|FIS_|FCM)" --limit 40 > "$E2E_OUT/firebase-lines.txt"
 E2E snap t1-launched
 crashes=$(grep -c . "$E2E_OUT/crash-t1.txt" || true)
 t1=fail; if [ -n "$pid" ] && [ "$crashes" = "0" ] && [[ "$install_out" == *Success* ]]; then t1=pass; fi
@@ -166,7 +167,10 @@ E2E snap t6-after
 # ------------------------------------------------------------------ T7
 # Two variants: "Start on boot" off (the default) and on.
 reboot_and_measure() {  # $1=test $2=logcat suffix
-  local t="$1"
+  local t="$1" wl
+  wl=$(adb shell dumpsys deviceidle whitelist | grep -c "$PKG" || true)
+  E2E record "$t" --set "deviceidle_allowlisted_before_reboot=$wl"
+  log "$t: app on deviceidle allow-list before reboot: $wl"
   E2E mark "$t"
   sleep 2
   stop_logcat

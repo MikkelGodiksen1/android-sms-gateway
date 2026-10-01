@@ -37,7 +37,8 @@ UA = "senel-e2e-test/1.0"
 # ---------------------------------------------------------------- utilities
 
 def log(msg):
-    print(f"[{datetime.now(timezone.utc):%H:%M:%S}] {msg}", flush=True)
+    # stderr, so command substitution in run.sh only captures the real output
+    print(f"[{datetime.now(timezone.utc):%H:%M:%S}] {msg}", file=sys.stderr, flush=True)
 
 
 def sh(cmd, timeout=60):
