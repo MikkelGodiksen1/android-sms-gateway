@@ -45,7 +45,7 @@ class GatewaySettings(
         get() = storage.get<String>(PRIVATE_TOKEN)
 
     val notificationChannel: NotificationChannel
-        get() = storage.get<NotificationChannel>(NOTIFICATION_CHANNEL) ?: NotificationChannel.AUTO
+        get() = storage.get<NotificationChannel>(NOTIFICATION_CHANNEL) ?: NotificationChannel.SSE_ONLY
 
     companion object {
         private const val REGISTRATION_INFO = "REGISTRATION_INFO"
@@ -93,7 +93,7 @@ class GatewaySettings(
 
                 NOTIFICATION_CHANNEL -> {
                     val newValue = it.value?.let { NotificationChannel.valueOf(it.toString()) }
-                        ?: NotificationChannel.AUTO
+                        ?: NotificationChannel.SSE_ONLY
                     val changed = notificationChannel != newValue
 
                     storage.set(it.key, newValue.name)
