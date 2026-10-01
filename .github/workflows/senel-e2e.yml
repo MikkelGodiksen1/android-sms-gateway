@@ -1,0 +1,47 @@
+name: senel-e2e
+
+# End-to-end test of the released Senel APK on an Android emulator:
+# T1 install/launch, T2 cloud registration over SSE, T3 webhooks, T4 awake send,
+# T5a/T5b send in deep Doze (with/without allow-list), T6 inbound SMS in Doze,
+# T7 reboot recovery (Start on boot off/on), T8 reinstall + sign in to the same account.
+# Uses a fresh throwaway account on api.sms-gate.app and a webhook.site endpoint.
+
+on:
+  push:
+    branches: [e2e]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run e2e on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          E2E_OUT: ${{ github.workspace }}/e2e-out
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/e2e/run.sh
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: senel-e2e-results
+          path: e2e-out/
+          if-no-files-found: warn
