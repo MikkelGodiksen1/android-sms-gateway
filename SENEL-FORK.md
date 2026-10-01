@@ -13,6 +13,7 @@ because the work they trigger is scheduled as regular WorkManager jobs. This for
 2. **Expedited status reporting**: `gateway/workers/SendStateWorker.kt` is enqueued as expedited work and has a foreground notification.
 3. **Expedited webhook forwarding**: `webhooks/workers/WebhookQueueProcessorWorker.kt` is expedited when it runs without an initial delay.
 4. **SSE by default**: `gateway/GatewaySettings.kt` and `res/xml/cloud_server_preferences.xml` default the notification channel to `SSE_ONLY`.
+5. **Start on boot by default**: `helpers/SettingsHelper.kt` defaults `autostart` to `true` (the `BootReceiver` is already enabled in the manifest), so the gateway comes back after a reboot without opening the app. Turning the switch off still disables the receiver.
 
 Notification ids and strings for the new foreground notifications live in `notifications/NotificationsService.kt` and `res/values/strings.xml`.
 

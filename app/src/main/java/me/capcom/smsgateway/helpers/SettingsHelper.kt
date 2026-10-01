@@ -16,7 +16,9 @@ class SettingsHelper(private val context: Context) {
     }
 
     var autostart: Boolean
-        get() = settings.getBoolean(PREF_KEY_AUTOSTART, false)
+        // On by default: the BootReceiver is enabled in the manifest, so a fresh install
+        // restarts the gateway after a reboot without anyone opening the app.
+        get() = settings.getBoolean(PREF_KEY_AUTOSTART, true)
         set(value) {
             // enable broadcast receiver
             context.packageManager.setComponentEnabledSetting(
