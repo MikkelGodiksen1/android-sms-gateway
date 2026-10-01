@@ -174,8 +174,11 @@ E2E snap t9-after
 
 # ------------------------------------------------------------------ T7
 # "Start on boot" is never touched here: v2 should have it on by default.
-reboot_and_measure() {  # $1=test $2=logcat suffix
-  local t="$1" wl
+reboot_and_measure() {  # $1=test $2=logcat suffix $3=expected allow-list state (1/0)
+  local t="$1" want_wl="$3" wl
+  # DeviceIdleController writes allow-list changes to disk ~5 s later; give it time
+  # so the change survives the reboot.
+  sleep 20
   wl=$(adb shell dumpsys deviceidle whitelist | grep -c "$PKG" || true)
   E2E record "$t" --set "deviceidle_allowlisted_before_reboot=$wl"
   log "$t: app on deviceidle allow-list before reboot: $wl"
@@ -205,6 +208,10 @@ reboot_and_measure() {  # $1=test $2=logcat suffix
   log "$t: pid=$p allow-listed=$wl2 FGS-not-allowed=$fgs_denied"
   E2E measure-send --test "$t" --timeout "$T7_TIMEOUT"
   capture_service_state "$t" "$t"
+  if [ "$wl2" != "$want_wl" ]; then
+    log "$t: INVALID, allow-list after reboot is $wl2, expected $want_wl"
+    E2E record "$t" --set status=invalid --set "error=allow-list after reboot $wl2, expected $want_wl"
+  fi
 }
 
 # Read the "Start on boot" switch from a UI dump without tapping it.
@@ -225,12 +232,12 @@ check_autostart_ui() {  # $1=test $2=snap name
 section "T7-default-allow reboot, default Start on boot, allow-listed"
 check_autostart_ui T7-default-allow t7da-autostart
 adb shell dumpsys deviceidle whitelist +"$PKG" | tr -d '\r'
-reboot_and_measure T7-default-allow 2-after-reboot-default-allow
+reboot_and_measure T7-default-allow 2-after-reboot-default-allow 1
 
 section "T7-default-noallow reboot, default Start on boot, NOT allow-listed"
 check_autostart_ui T7-default-noallow t7dn-autostart
 adb shell dumpsys deviceidle whitelist -"$PKG" | tr -d '\r'
-reboot_and_measure T7-default-noallow 3-after-reboot-default-noallow
+reboot_and_measure T7-default-noallow 3-after-reboot-default-noallow 0
 
 # ------------------------------------------------------------------ T8
 section "T8 reinstall and sign in to the existing account"
