@@ -8,6 +8,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.google.gson.GsonBuilder
@@ -96,6 +97,10 @@ class WebhookQueueProcessorWorker(
                     }
                     if (initialDelayMs > 0) {
                         setInitialDelay(initialDelayMs, TimeUnit.MILLISECONDS)
+                    } else {
+                        // Expedited so webhooks go out promptly in Doze. WorkManager
+                        // rejects expedited requests that have an initial delay.
+                        setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                     }
                 }
                 .build()
