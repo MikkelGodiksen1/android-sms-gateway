@@ -1,0 +1,112 @@
+name: senel-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version-name:
+        description: "Version name, e.g. 1.77.1-senel.1"
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JAVA 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: 17
+
+      - name: Cache Gradle and wrapper
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+
+      # The Google Services Gradle plugin requires a config at build time.
+      # This fork has no Firebase project, so a well-formed placeholder is used
+      # and the app defaults to the SSE notification channel instead of FCM.
+      - name: Write placeholder google-services.json
+        run: |
+          cat > app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "placeholder-sms-gateway"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                  "android_client_info": {
+                    "package_name": "me.capcom.smsgateway"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  {
+                    "current_key": "AIzaSyPLACEHOLDER0000000000000000000000"
+                  }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+
+      - name: Set App Version
+        env:
+          VERSION_NAME: ${{ inputs.version-name }}
+        run: |
+          sed -i "s/versionName.*/versionName \"${VERSION_NAME#v}\"/" app/build.gradle
+          sed -i "s/versionCode.*/versionCode $(( $(date +%s) / 60 ))/" app/build.gradle
+          grep -n "versionName\|versionCode" app/build.gradle
+
+      - name: Decode Keystore
+        env:
+          ENCODED_STRING: ${{ secrets.SIGNING_KEY_STORE_BASE64 }}
+          SIGNING_KEY_STORE_PATH: app/keystore.jks
+        run: |
+          echo $ENCODED_STRING > keystore-b64.txt
+          base64 -d keystore-b64.txt > $SIGNING_KEY_STORE_PATH
+          rm keystore-b64.txt
+
+      - name: Build release apk
+        env:
+          SIGNING_KEY_STORE_PATH: app/keystore.jks
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      - name: Rename apk
+        run: mv app/build/outputs/apk/release/app-release.apk sms-gateway-senel.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: senel-v${{ inputs.version-name }}
+          name: senel-v${{ inputs.version-name }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Fork build of SMS Gateway for Android.
+
+            - Includes upstream PR #449 (pull messages immediately on push, SSE and ping).
+            - Status reporting (SendStateWorker) and webhook forwarding (WebhookQueueProcessorWorker) run as expedited work.
+            - Defaults to the SSE notification channel, because this build has no Firebase config and cannot receive FCM pushes.
+
+            Signed with a different key than the official app: uninstall the official app before installing.
+          files: sms-gateway-senel.apk
