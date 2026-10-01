@@ -11,11 +11,12 @@ mkdir -p "$E2E_OUT/ui"
 rm -f "$E2E_STATE"
 
 PKG=me.capcom.smsgateway
-APK_URL=https://github.com/MikkelGodiksen1/android-sms-gateway/releases/download/senel-v1.77.1-senel.1/sms-gateway-senel.apk
+APK_URL=https://github.com/MikkelGodiksen1/android-sms-gateway/releases/download/senel-v1.77.1-senel.2/sms-gateway-senel.apk
 APK="${RUNNER_TEMP:-/tmp}/sms-gateway-senel.apk"
 T4_TIMEOUT=180
 DOZE_TIMEOUT=600
 T7_TIMEOUT=600
+T9_IDLE=900
 T8_TIMEOUT=180
 
 E2E() { python3 "$HERE/e2e.py" "$@"; }
@@ -164,8 +165,15 @@ E2E measure-inbound --test T6 --timeout "$DOZE_TIMEOUT" --doze whitelist
 capture_service_state T6 T6
 E2E snap t6-after
 
+# ------------------------------------------------------------------ T9
+section "T9 long Doze (${T9_IDLE}s idle, allow-listed), then send"
+E2E mark T9
+E2E measure-send --test T9 --timeout "$DOZE_TIMEOUT" --doze whitelist --pre-idle "$T9_IDLE"
+capture_service_state T9 T9
+E2E snap t9-after
+
 # ------------------------------------------------------------------ T7
-# Two variants: "Start on boot" off (the default) and on.
+# "Start on boot" is never touched here: v2 should have it on by default.
 reboot_and_measure() {  # $1=test $2=logcat suffix
   local t="$1" wl
   wl=$(adb shell dumpsys deviceidle whitelist | grep -c "$PKG" || true)
@@ -182,33 +190,47 @@ reboot_and_measure() {  # $1=test $2=logcat suffix
   start_logcat "$2"
   log "$t: boot completed, not opening the app, waiting 60s"
   sleep 60
-  local p
+  local p wl2
   p=$(app_pid)
+  wl2=$(adb shell dumpsys deviceidle whitelist | grep -c "$PKG" || true)
   E2E snap "${t,,}-after-boot"
   capture_service_state "$t" "$t"
-  E2E record "$t" --set "pid_after_boot=$p"
+  E2E logcat-grep --marker "$t" --limit 60 \
+    --pattern "ForegroundServiceStartNotAllowedException|SSEForegroundService|reasonCode|BootReceiver|Background started FGS|startForegroundService" \
+    > "$E2E_OUT/fgs-$t.txt"
+  local fgs_denied
+  fgs_denied=$(grep -c "ForegroundServiceStartNotAllowedException" "$E2E_OUT/fgs-$t.txt" || true)
+  E2E record "$t" --set "pid_after_boot=$p" --set "deviceidle_allowlisted_after_reboot=$wl2" \
+    --set "fgs_start_not_allowed_lines=$fgs_denied" --set-file "fgs_log=$E2E_OUT/fgs-$t.txt"
+  log "$t: pid=$p allow-listed=$wl2 FGS-not-allowed=$fgs_denied"
   E2E measure-send --test "$t" --timeout "$T7_TIMEOUT"
   capture_service_state "$t" "$t"
 }
 
-section "T7off reboot, Start on boot OFF (default)"
-auto=$(E2E checked t7off-autostart --id switchAutostart)
-log "autostart switch before T7off: $auto"
-E2E record T7off --set "autostart_switch=$auto"
-adb shell input keyevent 3
-reboot_and_measure T7off 2-after-reboot-autostart-off
+# Read the "Start on boot" switch from a UI dump without tapping it.
+check_autostart_ui() {  # $1=test $2=snap name
+  adb shell wm dismiss-keyguard
+  adb shell am start -W -n "$PKG/.MainActivity" | tr -d '\r'
+  sleep 5
+  local auto
+  auto=$(E2E checked "$2" --id switchAutostart)
+  local dis
+  dis=$(adb shell dumpsys package "$PKG" | grep -A10 "disabledComponents:" | grep -c "BootReceiver" || true)
+  log "$1: Start on boot switch shows checked=$auto (not touched), BootReceiver disabled=$dis"
+  E2E record "$1" --set "autostart_switch_ui=$auto" --set "boot_receiver_disabled=$dis"
+  adb shell input keyevent 3
+  sleep 3
+}
 
-section "T7on reboot, Start on boot ON"
-adb shell wm dismiss-keyguard
-adb shell am start -W -n "$PKG/.MainActivity" | tr -d '\r'
-sleep 5
-auto=$(E2E checked t7on-autostart --id switchAutostart --want true)
-log "autostart switch before T7on: $auto"
-E2E snap t7on-autostart-set
-E2E record T7on --set "autostart_switch=$auto"
-adb shell input keyevent 3
-sleep 3
-reboot_and_measure T7on 3-after-reboot-autostart-on
+section "T7-default-allow reboot, default Start on boot, allow-listed"
+check_autostart_ui T7-default-allow t7da-autostart
+adb shell dumpsys deviceidle whitelist +"$PKG" | tr -d '\r'
+reboot_and_measure T7-default-allow 2-after-reboot-default-allow
+
+section "T7-default-noallow reboot, default Start on boot, NOT allow-listed"
+check_autostart_ui T7-default-noallow t7dn-autostart
+adb shell dumpsys deviceidle whitelist -"$PKG" | tr -d '\r'
+reboot_and_measure T7-default-noallow 3-after-reboot-default-noallow
 
 # ------------------------------------------------------------------ T8
 section "T8 reinstall and sign in to the existing account"

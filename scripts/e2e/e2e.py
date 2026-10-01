@@ -529,7 +529,25 @@ def cmd_measure_send(a):
         doze = doze_enter(a.doze == "whitelist")
         if doze["deep_state"] != "IDLE":
             log(f"{a.test}: WARNING deep state is {doze['deep_state']}, not IDLE")
-    text = f"Senel e2e {a.test} dummy test message {int(time.time())}"
+    if a.pre_idle:
+        # Sit in Doze without sending anything, re-forcing idle if the device leaves it.
+        log(f"{a.test}: idling {a.pre_idle}s in Doze before sending")
+        start = time.time()
+        while time.time() - start < a.pre_idle:
+            time.sleep(min(60, max(0, a.pre_idle - (time.time() - start))))
+            if doze is not None:
+                doze_check(doze)
+        doze = doze or {}
+        doze["pre_idle_s"] = round(time.time() - start)
+        st, devs = api("GET", "/devices")
+        if st == 200 and isinstance(devs, list):
+            d = next((d for d in devs if d.get("id") == device_id), None)
+            seen = iso_to_ts(d.get("lastSeen")) if d else None
+            doze["lastSeen_before_send"] = d.get("lastSeen") if d else None
+            doze["lastSeen_age_before_send_s"] = round(time.time() - seen, 1) if seen else None
+        doze["deep_state_before_send"] = deep_state()
+        log(f"{a.test}: idle done: {doze}")
+    text =f"Senel e2e {a.test} dummy test message {int(time.time())}"
     t0 = time.time()
     st, resp = api("POST", "/messages?skipPhoneValidation=true",
                    {"textMessage": {"text": text}, "deviceId": device_id, "phoneNumbers": [TO_NUMBER]})
@@ -673,7 +691,8 @@ def cmd_record(a):
 
 def cmd_summary(a):
     res = load_json(RESULTS_FILE, {})
-    order = ["T1", "T2", "T3", "T4", "T5a", "T5b", "T6", "T7off", "T7on", "T8", "cleanup"]
+    order = ["T1", "T2", "T3", "T4", "T5a", "T5b", "T6", "T9", "T7-default-allow",
+             "T7-default-noallow", "T8", "cleanup"]
     lines = ["| Test | Status | Processed (s) | Sent (s) | Webhook (s) | Notes |",
              "|---|---|---|---|---|---|"]
     for t in order + sorted(k for k in res if k not in order):
@@ -749,7 +768,8 @@ def main():
     s = sub.add_parser("measure-send"); s.add_argument("--test", required=True)
     s.add_argument("--device-id"); s.add_argument("--device-key", default="device_id")
     s.add_argument("--timeout", type=int, default=180)
-    s.add_argument("--doze", choices=["whitelist", "nowhitelist"]); s.set_defaults(f=cmd_measure_send)
+    s.add_argument("--doze", choices=["whitelist", "nowhitelist"])
+    s.add_argument("--pre-idle", type=int, default=0); s.set_defaults(f=cmd_measure_send)
     s = sub.add_parser("measure-inbound"); s.add_argument("--test", required=True)
     s.add_argument("--timeout", type=int, default=600); s.add_argument("--sender", default="4512345678")
     s.add_argument("--body", default="Ja tak")

@@ -3,7 +3,8 @@ name: senel-e2e
 # End-to-end test of the released Senel APK on an Android emulator:
 # T1 install/launch, T2 cloud registration over SSE, T3 webhooks, T4 awake send,
 # T5a/T5b send in deep Doze (with/without allow-list), T6 inbound SMS in Doze,
-# T7 reboot recovery (Start on boot off/on), T8 reinstall + sign in to the same account.
+# T9 send after 15 min idle in Doze, T7 reboot recovery with the default Start on boot
+# (with/without allow-list), T8 reinstall + sign in to the same account.
 # Uses a fresh throwaway account on api.sms-gate.app and a webhook.site endpoint.
 
 on:
