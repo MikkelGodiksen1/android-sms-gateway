@@ -4,17 +4,21 @@ import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkRequest
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.capcom.smsgateway.R
 import me.capcom.smsgateway.modules.gateway.GatewayApi
 import me.capcom.smsgateway.modules.gateway.GatewayService
 import me.capcom.smsgateway.modules.messages.MessagesService
+import me.capcom.smsgateway.modules.notifications.NotificationsService
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.Date
@@ -24,6 +28,8 @@ class SendStateWorker(appContext: Context, params: WorkerParameters) :
     CoroutineWorker(appContext, params), KoinComponent {
     private val messagesService: MessagesService by inject()
     private val gatewayService: GatewayService by inject()
+    private val notificationsSvc: NotificationsService by inject()
+
     override suspend fun doWork(): Result {
         try {
             val messageId = inputData.getString(MESSAGE_ID) ?: return Result.failure()
@@ -55,13 +61,32 @@ class SendStateWorker(appContext: Context, params: WorkerParameters) :
         }
     }
 
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        return createForegroundInfo()
+    }
+
+    // Expedited work runs as a foreground service below API 31.
+    private fun createForegroundInfo(): ForegroundInfo {
+        val notificationId = NotificationsService.NOTIFICATION_ID_SEND_STATE_WORKER
+        val notification = notificationsSvc.makeNotification(
+            applicationContext,
+            notificationId,
+            applicationContext.getString(R.string.send_state_notification)
+        )
+
+        return ForegroundInfo(notificationId, notification)
+    }
+
     companion object {
         private const val RETRY_COUNT = 10
 
         private const val MESSAGE_ID = "messageId"
 
         fun start(context: Context, messageId: String) {
+            // Expedited so status reaches the server promptly instead of
+            // waiting for the next Doze maintenance window.
             val work = OneTimeWorkRequestBuilder<SendStateWorker>()
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .setInputData(workDataOf(MESSAGE_ID to messageId))
                 .setBackoffCriteria(
                     BackoffPolicy.EXPONENTIAL,

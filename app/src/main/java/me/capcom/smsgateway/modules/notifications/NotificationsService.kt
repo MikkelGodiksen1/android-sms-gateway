@@ -27,6 +27,7 @@ class NotificationsService(
         NOTIFICATION_ID_REALTIME_EVENTS to R.drawable.notif_realtime_events,
         NOTIFICATION_ID_INBOX_WORKER to R.drawable.notif_webhook,
         NOTIFICATION_ID_PULL_WORKER to R.drawable.notif_realtime_events,
+        NOTIFICATION_ID_SEND_STATE_WORKER to R.drawable.notif_realtime_events,
     )
 
     private val builders = mapOf<Int, (NotificationCompat.Builder) -> NotificationCompat.Builder>(
@@ -97,5 +98,6 @@ class NotificationsService(
         const val NOTIFICATION_ID_REALTIME_EVENTS = 7
         const val NOTIFICATION_ID_INBOX_WORKER = 8
         const val NOTIFICATION_ID_PULL_WORKER = 9
+        const val NOTIFICATION_ID_SEND_STATE_WORKER = 10
     }
 }

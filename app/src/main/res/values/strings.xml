@@ -99,6 +99,7 @@
         days.</string>
     <string name="rotate_device_key">Rotate device key</string>
     <string name="send_messages_notification">Sending messages…</string>
+    <string name="send_state_notification">Reporting message status…</string>
     <string name="sending_webhook">Sending webhook…</string>
     <string name="processing_webhook_queue">Processing webhook queue…</string>
     <string name="processing_inbox_queue">Processing inbox upload…</string>
