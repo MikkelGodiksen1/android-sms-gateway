@@ -18,6 +18,7 @@ import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.logs.db.LogEntry
 import me.capcom.smsgateway.modules.notifications.NotificationsService
 import me.capcom.smsgateway.modules.orchestrator.EventsRouter
+import me.capcom.smsgateway.modules.webhooks.CallLogReporter
 import org.koin.android.ext.android.inject
 
 class SSEForegroundService : Service() {
@@ -27,6 +28,7 @@ class SSEForegroundService : Service() {
 
     private val notificationsSvc: NotificationsService by inject()
     private val logsService: LogsService by inject()
+    private val callLogReporter: CallLogReporter by inject()
 
     private val wakeLock: PowerManager.WakeLock by lazy {
         (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
@@ -89,6 +91,18 @@ class SSEForegroundService : Service() {
         if (!wifiLock.isHeld) {
             wifiLock.acquire()
         }
+
+        // The call log observer lives as long as this always-on service.
+        try {
+            callLogReporter.start()
+        } catch (e: Throwable) {
+            logsService.insert(
+                LogEntry.Priority.ERROR,
+                "SSEForegroundService",
+                "Failed to start call log reporter",
+                mapOf("error" to (e.message ?: e.toString()))
+            )
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -126,6 +140,7 @@ class SSEForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        callLogReporter.stop()
         sseManager.disconnect()
         if (wifiLock.isHeld) {
             wifiLock.release()

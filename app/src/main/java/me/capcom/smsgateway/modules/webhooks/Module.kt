@@ -10,6 +10,7 @@ val webhooksModule = module {
     singleOf(::WebHooksService)
     singleOf(::WebhookQueueRepository)
     singleOf(::WebhookPayloadStorage)
+    singleOf(::CallLogReporter)
     viewModelOf(::WebhookQueueViewModel)
 }
 

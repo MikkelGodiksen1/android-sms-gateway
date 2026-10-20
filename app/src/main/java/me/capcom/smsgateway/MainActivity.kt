@@ -7,14 +7,18 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import com.google.android.material.tabs.TabLayoutMediator
 import me.capcom.smsgateway.databinding.ActivityMainBinding
+import me.capcom.smsgateway.modules.webhooks.CallLogReporter
 import me.capcom.smsgateway.ui.HolderFragment
 import me.capcom.smsgateway.ui.HomeFragment
 import me.capcom.smsgateway.ui.SettingsFragment
 import me.capcom.smsgateway.helpers.LocaleHelper
+import org.koin.android.ext.android.inject
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+
+    private val callLogReporter: CallLogReporter by inject()
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleHelper.onAttach(newBase))
@@ -49,6 +53,13 @@ class MainActivity : AppCompatActivity() {
         }.attach()
 
         processIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        // READ_CALL_LOG may have been granted while the app was in the background.
+        callLogReporter.recheck()
     }
 
     override fun onNewIntent(intent: Intent) {
